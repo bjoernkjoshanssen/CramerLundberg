@@ -14,24 +14,20 @@ This is mostly hand-coded except that some integrability lemmas were
 proved by Aristotle.
 -/
 
-
 open ProbabilityTheory MeasureTheory
-open scoped BigOperators Real Nat Pointwise
 
-lemma h₀ (z) : ∫ (a : ℝ) in Set.Ici 0, z * Real.exp (-(z * a))
-            =  ∫ (a : ℝ), exponentialPDFReal z a := by
-        unfold exponentialPDFReal
-          gammaPDFReal
-        generalize Real.exp = f
-        have (g : ℝ → ℝ) :
-          ∫ (a : ℝ) in Set.Ici 0, g a = ∫ (a : ℝ), if 0 ≤ a then g a else 0 := by
-          rw [← integral_indicator]
-          · exact Real.ext_cauchy rfl
-          · simp
-        simp [this]
 
-lemma g₀ (s r x : ℝ) : s * Real.exp (-(s * x)) * Real.exp (-(r * x))
-                     = s * Real.exp (-((s+r) * x)) := by
+lemma integral_exponentialPDFReal_eq (z) :
+    ∫ a, exponentialPDFReal z a =
+    ∫ a in Set.Ici 0, z * Real.exp (-(z * a)) := by
+  rw [← integral_indicator]
+  · simp [exponentialPDFReal, gammaPDFReal]
+    rfl
+  · simp
+
+lemma Real.exp_assoc_add (s r x : ℝ) :
+    s * Real.exp (-(s * x)) * Real.exp (-(r * x)) =
+    s * Real.exp (-((s+r) * x)) := by
   rw [mul_assoc]
   congr
   rw [← Real.exp_add]
@@ -40,19 +36,16 @@ lemma g₀ (s r x : ℝ) : s * Real.exp (-(s * x)) * Real.exp (-(r * x))
 
 -- We need five "obvious" lemmas about measurability and integrability.
 lemma ae {r s : ℝ} (x : ℝ) :
- AEStronglyMeasurable (fun y ↦ if x ≤ y then
- exponentialPDFReal r x * exponentialPDFReal s y else 0) volume
-:= by
+    AEStronglyMeasurable (fun y ↦ if x ≤ y then
+    exponentialPDFReal r x * exponentialPDFReal s y else 0) volume := by
   refine aestronglyMeasurable_iff_aemeasurable.mpr ?_
   refine Measurable.aemeasurable ?_
   refine Measurable.ite ?_ ?_ ?_
   · apply measurableSet_Ici
-  · refine Measurable.mul ?_ ?_
-    · exact measurable_const
-    · exact measurable_exponentialPDFReal s
+  · refine Measurable.mul measurable_const <| measurable_exponentialPDFReal s
   simp
 
-lemma h₂ (z : ℝ) (hz : 0 < z) :
+lemma integral_exponentialPDFReal_eq_one (z : ℝ) (hz : 0 < z) :
     ∫ (y : ℝ), exponentialPDFReal z y = 1 := by
   have := @lintegral_exponentialPDF_eq_one z hz
   have h₁ : (1 : ℝ) = (1 : ENNReal).toReal := rfl
@@ -105,25 +98,27 @@ lemma first_loss_is_ruinous {r s : ℝ} (hs : 0 < s) (hr : 0 < r) :
   simp only [mul_one]
   rw [integral_sub]
   · have : ∫ (a : ℝ) in Set.Ici 0, s * Real.exp (-(s * a)) = 1 := by
-      rw [h₀]
-      exact EReal.coe_eq_one.mp (congrArg Real.toEReal (h₂ s hs))
+      rw [← integral_exponentialPDFReal_eq]
+      exact EReal.coe_eq_one.mp (congrArg Real.toEReal
+        (integral_exponentialPDFReal_eq_one s hs))
     rw [this]
-    simp_rw [g₀]
+    simp_rw [Real.exp_assoc_add]
     rw [integral_const_mul]
     have :          ∫ (x : ℝ) in Set.Ici 0, Real.exp (-((s + r) * x))
       = (1/(s+r)) * ∫ (x : ℝ) in Set.Ici 0, (s+r) * Real.exp (-((s + r) * x)) := by
         rw [integral_const_mul]
         field_simp
     rw [this]
-    rw [h₀, h₂]
+    rw [← integral_exponentialPDFReal_eq,
+      integral_exponentialPDFReal_eq_one]
     · field_simp
       linarith
     · linarith
   · refine integrable_of_integral_eq_one ?_
-    rw [h₀]
-    rw [h₂]
+    rw [← integral_exponentialPDFReal_eq]
+    rw [integral_exponentialPDFReal_eq_one]
     exact hs
-  · simp_rw [g₀]
+  · simp_rw [Real.exp_assoc_add]
     have : (fun y ↦ s * Real.exp (-((s + r) * y)))
          = (fun _ => s / (s + r)) * (fun y ↦ (s + r) * Real.exp (-((s + r) * y))) := by
       ext y
@@ -132,26 +127,9 @@ lemma first_loss_is_ruinous {r s : ℝ} (hs : 0 < s) (hr : 0 < r) :
     rw [this]
     refine Integrable.const_mul' ?_ _
     refine integrable_of_integral_eq_one ?_
-    rw [h₀]
-    rw [h₂]
+    rw [← integral_exponentialPDFReal_eq]
+    rw [integral_exponentialPDFReal_eq_one]
     linarith
-
--- example (r s : ℝ) (hr : 0 < r) (hs : 0 < s) :
---     Measure.pi ![expMeasure r, expMeasure s]
---     {v | v 0 ≤ v 1} = some ⟨r / (r + s), by field_simp;linarith⟩ := by
---   -- rw [measure_eq_integral]
---   have := @first_loss_is_ruinous r s hs hr
---   simp_rw [← this]
---   simp
---   have (q : ℝ) : expMeasure q = volume.withDensity (exponentialPDF q) := by
---     rfl
---   repeat rw [this]
---   rw [Measure.withDensity]
---   unfold exponentialPDF
---   -- have := @integral_indicator
-
---   -- have := @lintegral_withDensity_eq_lintegral_mul
---   zorry
 
 lemma exp_nonneg {r s : ℝ} (hr : 0 < r) (hs : 0 < s) (x y : ℝ) :
 0 ≤ if x ≤ y then exponentialPDFReal r x * exponentialPDFReal s y else 0
@@ -435,3 +413,471 @@ lemma first_loss_is_ruinous' (r s : ℝ) (hs : 0 < s) (hr : 0 < r) :
 --       = a := by
 
 --   zorry
+
+/-- Probably the assumption of σ-finiteness is not needed,
+but that's fine. -/
+lemma sigmaFiniteMeasure_pi_prod (μ ν : Measure ℝ)
+  [SigmaFinite μ] [SigmaFinite ν] :
+    Measure.pi ![μ, ν] {v | v 0 ≤ v 1} =
+    Measure.prod μ ν {v | v.fst ≤ v.snd} := by
+  have h := (@MeasureTheory.measurePreserving_finTwoArrow_vec
+    ℝ Real.measurableSpace μ ν _ _).map_eq
+  have h₁ : Measure.map (finTwoArrowEquiv ℝ)
+    (Measure.pi ![μ, ν]) = Measure.prod μ ν := by
+    rw [← h]
+    simp
+  rw [← h₁]
+  symm
+  rw [Measure.map_apply]
+  · simp
+  · refine Measurable.prodMk ?_ ?_
+    all_goals exact measurable_pi_apply _
+  · simp only [measurableSet_setOf];exact measurable_le
+
+lemma expMeasure_pi_prod (r s : ℝ) :
+    Measure.pi ![expMeasure r, expMeasure s] {v | v 0 ≤ v 1} =
+    Measure.prod (expMeasure r) (expMeasure s) {v | v.fst ≤ v.snd} := by
+  apply @sigmaFiniteMeasure_pi_prod (expMeasure r) (expMeasure s)
+    (SigmaFinite.withDensity_of_ne_top' <| by simp [gammaPDF])
+    (SigmaFinite.withDensity_of_ne_top' <| by simp [gammaPDF])
+
+  -- rw [measure_eq_integral]
+  -- have := @first_loss_is_ruinous r s hs hr
+  -- simp_rw [← this]
+  -- simp
+  -- have (q : ℝ) : expMeasure q = volume.withDensity (exponentialPDF q) := by
+  --   rfl
+  -- repeat rw [this]
+  -- rw [Measure.withDensity]
+  -- unfold exponentialPDF
+  -- -- have := @integral_indicator
+
+  -- -- have := @lintegral_withDensity_eq_lintegral_mul
+  -- zorry
+
+lemma first_loss_is_ruinous'' (r s : ℝ) (hs : 0 < s) (hr : 0 < r) :
+    (Measure.pi ![expMeasure r, expMeasure s]) {x | x 0 ≤ x 1}
+    = some ⟨r / (r + s), by field_simp;linarith⟩ := by
+    rw [expMeasure_pi_prod]
+    exact first_loss_is_ruinous' r s hs hr
+
+
+-- In the degenerate case `s=0`, the measure becomes 0.
+lemma first_loss_is_ruinous_zero (r s : ℝ) (hs : s = 0)
+  :
+    (Measure.prod (expMeasure r) (expMeasure s)) {x | x.1 ≤ x.2}
+    = 0 := by
+  subst s
+  unfold expMeasure gammaMeasure gammaPDF gammaPDFReal
+  simp
+
+-- In the degenerate case `r=0`, the measure becomes 0.
+lemma first_loss_is_ruinous_zero' (r s : ℝ) (hr : r = 0) :
+    (Measure.prod (expMeasure r) (expMeasure s)) {x | x.1 ≤ x.2}
+    = 0 := by
+  subst r
+  unfold expMeasure gammaMeasure gammaPDF gammaPDFReal
+  simp
+
+
+def integralEquation (α β c : ℝ) (φ : ℝ → ℝ) :=
+  ∀ u ≥ 0, φ u = ∫ t, exponentialPDFReal α t * ∫ x in Set.Iic (u + c * t),
+    φ (u + c * t - x) * exponentialPDFReal β x
+
+lemma exists_solution (α β c : ℝ) :
+    ∃ φ, integralEquation α β c φ := by
+  use 0
+  simp [integralEquation]
+
+lemma exists_solution' (β c : ℝ) (φ : ℝ → ℝ) :
+    integralEquation 0 β c φ → ∀ u ≥ 0, φ u = 0 := by
+  unfold integralEquation exponentialPDFReal gammaPDFReal
+  simp only [Real.rpow_one, Real.Gamma_one, div_one, sub_self, Real.rpow_zero, mul_one, zero_mul,
+    neg_zero, Real.exp_zero, ite_self, mul_ite, mul_zero, integral_zero]
+  tauto
+
+lemma exists_solution'' (α c : ℝ) (φ : ℝ → ℝ) :
+    integralEquation α 0 c φ → ∀ u ≥ 0, φ u = 0 := by
+  unfold integralEquation exponentialPDFReal gammaPDFReal
+  simp only [Real.rpow_one, Real.Gamma_one, div_one, sub_self, Real.rpow_zero, mul_one, zero_mul,
+    neg_zero, Real.exp_zero, ite_self, mul_zero, integral_zero]
+  tauto
+
+/-- u = starting capital, φ u = nonruin probability,
+c = income rate, α = loss rate, β = loss-amount-stop-rate
+The equation for `φ` is from the end of
+https://en.wikipedia.org/wiki/Ruin_theory#Classical_model
+`hc` says that the income rate makes the game exactly evenly fair
+as in Applied Math Seminar April 8, 2026.
+-/
+lemma too_fair (α β c : ℝ) (φ : ℝ → ℝ) (hα : α ≠ 0)
+    (hβ : β ≠ 0)
+    (h : φ = fun u => 1 - ((α * β) / c) * Real.exp (-(1 / β - α / c) * u))
+    (hc : c = α * β) :
+    integralEquation α β c φ := by
+  subst c
+  rw [h]
+  have : α * β / (α * β) = 1 := by
+    field_simp
+  rw [this]
+  have : (1 / β - α / (α * β)) = 0 := by
+    field_simp
+    linarith
+  rw [this]
+  simp [integralEquation]
+open Real
+
+/-- This verifies a claim from Wikipedia at the end of
+https://en.wikipedia.org/wiki/Ruin_theory#Classical_model
+-/
+lemma ruin_theory_classical_model_solution {α β c : ℝ} {φ : ℝ → ℝ}
+    (hα : 0 < α) (hc : 0 < c) (hβ : β = 1) -- we may assume
+    (h : φ = fun u => 1 - ((α * β) / c) * Real.exp (-(1 / β - α / c) * u)) :
+    integralEquation α β c φ := by
+  have what : β⁻¹ < α / c + β := by
+    rw [hβ]
+    simp_all
+  have gen₂ : (β * (α + c * β) - c) ≠ 0 := by
+    rw [hβ]
+    simp
+    linarith
+  have gen₁ : (c - β * (α + β * c)) ≠ 0 := by
+    rw [hβ]
+    simp
+    linarith
+  have gen₀ : (β⁻¹ - (α / c + β)) ≠ 0 := by
+    rw [hβ]
+    simp
+    constructor <;> linarith
+  have hite (x y z : ℝ) :
+    (if (0 ≤ x) then (y - z) else 0) =
+    (if (0 ≤ x) then y else 0) -
+    (if (0 ≤ x) then z else 0) := by
+    split_ifs  <;> simp
+  have hitemul (x y z : ℝ) :
+    (if (0 ≤ x) then (y * z) else 0) =
+    y * (if (0 ≤ x) then z else 0) := by
+    split_ifs  <;> simp
+  intro u hu
+  rw [h]
+  simp only [one_div, neg_sub]
+  have ht (t : ℝ) :
+    (if 0 ≤ t then (∫ (x : ℝ) in Set.Iic (u + c * t),
+        (1 - α * β / c * Real.exp ((α / c - β⁻¹) *
+        (u + c * t - x))) * exponentialPDFReal β x) else 0)
+        =  if 0 ≤ t then (1 - rexp (-(β * (u + c * t))) -
+    α * β ^ 2 / c * rexp ((α / c - β⁻¹) * (u + c * t)) *
+      ((α / c + β - β⁻¹)⁻¹ * (1 - rexp (-((α / c + β - β⁻¹) * (u + c * t)))))) else 0 := by
+      split_ifs with g₀
+      · unfold exponentialPDFReal gammaPDFReal
+        simp only [rpow_one, Gamma_one, div_one, sub_self, rpow_zero, mul_one, mul_ite, mul_zero]
+        simp_rw [sub_mul]
+        simp only [one_mul, neg_sub]
+        have (x : ℝ) :
+            α * β / c * rexp (α / c * (u + c * t - x) - β⁻¹ *
+            (u + c * t - x)) * (β * rexp (-(β * x)))
+            =
+            α * β ^ 2 / c * rexp (α / c * (u + c * t - x) - β⁻¹ * (u + c * t - x)
+            ) * (rexp (-(β * x)))        := by
+                    ring_nf
+        simp_rw [this]
+        have (x : ℝ) :
+            α * β ^ 2 / c * rexp (α / c * (u + c * t - x) - β⁻¹ * (u + c * t - x)) * rexp (-(β * x))
+            =
+            α * β ^ 2 / c * (rexp (α / c * (u + c * t - x) - β⁻¹ * (u + c * t - x))
+                        * rexp (-(β * x)))
+            := by ring_nf
+        simp_rw [this]
+        simp_rw [← exp_add]
+        have (x : ℝ) :
+        α / c * (u + c * t - x)
+        =
+        (α / c * (u + c * t))
+        -
+        α / c * (x)
+        := by nth_rw 1 [mul_sub]
+        simp_rw [this]
+        simp_rw [hite]
+
+        rw [integral_sub]
+        · have : (∫ (a : ℝ) in Set.Iic (u + c * t),
+            if 0 ≤ a then β * rexp (-(β * a)) else 0)
+           = (∫ (a : ℝ) in Set.Iic (u + c * t), exponentialPDFReal β a) := by
+            unfold exponentialPDFReal gammaPDFReal
+            simp
+          rw [this]
+          rw [← ProbabilityTheory.cdf_expMeasure_eq_integral]
+          · rw [cdf_expMeasure_eq]
+            · have (a : ℝ) :  (α / c * (u + c * t) - α / c * a - β⁻¹ * (u + c * t - a) + -(β * a))
+                =
+                ((α / c - β⁻¹) * (u + c * t)
+                + (β⁻¹ - (α / c + β)) * a)
+                := by
+                    field_simp
+                    ring_nf
+
+              simp_rw [this]
+              simp_rw [exp_add]
+              simp_rw [hitemul]
+              simp_rw [← mul_assoc]
+              rw [integral_const_mul]
+              have (a : ℝ) :
+                (if 0 ≤ a then rexp ((β⁻¹ - (α / c + β)) * a) else 0)
+                =
+                (-(β⁻¹ - (α / c + β)))⁻¹ *
+                exponentialPDFReal (-(β⁻¹ - (α / c + β))) a
+                := by
+                    unfold exponentialPDFReal gammaPDFReal
+                    simp
+                    field_simp
+                    congr
+                    field_simp
+                    congr
+                    ring_nf
+              simp_rw [this]
+              rw [integral_const_mul]
+              rw [← ProbabilityTheory.cdf_expMeasure_eq_integral]
+              · rw [cdf_expMeasure_eq]
+                · have : 0 ≤ u + c * t := by
+                    have : 0 ≤ c * t := by
+                        apply mul_nonneg <;> linarith
+                    calc 0 ≤ u := by tauto
+                     _ ≤ u + (c * t) := by linarith
+                  repeat rw [if_pos this]
+                  ring_nf
+                simp only [neg_sub, sub_pos]
+                exact what
+              · simp only [neg_sub, sub_pos]
+                exact what
+            · linarith
+          · linarith
+        · refine Integrable.restrict ?_
+          suffices  Integrable (exponentialPDFReal β) volume by
+            unfold exponentialPDFReal gammaPDFReal at this
+            convert this
+            simp
+          refine exponentialPDFReal_integrable ?_
+          rw [hβ]
+          simp
+        · refine Integrable.restrict ?_
+          simp_rw [hitemul]
+          rw [integrable_const_mul_iff]
+          -- rewrite the exponent as usual
+          rw [hβ]
+          simp
+          ring_nf
+          field_simp
+          have (x : ℝ) :
+          ((α * (c * t + u - x) - c ^ 2 * t - c * u) / c)
+          =
+            (α / c - 1) * (c * t + u)
+            + (-α / c) * (x)
+
+          := by field_simp;ring_nf
+          simp_rw [this]
+          simp_rw [exp_add]
+          simp_rw [hitemul]
+          rw [integrable_const_mul_iff]
+          suffices Integrable (exponentialPDFReal (α/c)) volume by
+            unfold exponentialPDFReal gammaPDFReal at this
+            simp at this
+            simp_rw [hitemul] at this
+            rw [integrable_const_mul_iff] at this
+            ring_nf at this ⊢
+            exact this
+            refine isUnit_iff_exists_inv.mpr ?_
+            use (α/c)⁻¹
+            field_simp
+          refine exponentialPDFReal_integrable ?_
+          apply div_pos
+          linarith
+          linarith
+          refine isUnit_iff_exists_inv.mpr ?_
+          use (rexp ((α / c - 1) * (c * t + u)))⁻¹
+          field_simp
+          rw [hβ]
+          simp
+          constructor <;> linarith
+      · rfl
+
+  have hCongr (f g : ℝ → ℝ) (A : Set ℝ) (hA : MeasurableSet A)
+    (h : ∀ x ∈ A, f x = g x) : ∫ x in A, f x = ∫ x in A, g x := by
+
+    repeat rw [← integral_indicator]
+    · congr
+      ext x
+      simp only [Set.indicator]
+      split_ifs with g₀
+      · rw [h]; exact g₀
+      · rfl
+    · exact hA
+    · exact hA
+  have :  ∫ (t : ℝ),
+    exponentialPDFReal α t *
+      ∫ (x : ℝ) in Set.Iic (u + c * t),
+        (1 - α * β / c * rexp ((α / c - β⁻¹) * (u + c * t - x))) * exponentialPDFReal β x
+      =
+       ∫ (t : ℝ),
+    ( (if 0 ≤ t then α ^ 1 / Gamma 1 * t ^ (1 - 1) * rexp (-(α * t)) else 0)) *
+      if 0 ≤ t then ∫ (x : ℝ) in Set.Iic (u + c * t),
+        (1 - α * β / c * rexp ((α / c - β⁻¹) * (u + c * t - x))) * exponentialPDFReal β x else 0
+        := by
+    unfold exponentialPDFReal gammaPDFReal
+    congr
+    ext t
+    simp only [rpow_one, Gamma_one, div_one, sub_self, rpow_zero, mul_one, mul_ite, mul_zero,
+      ite_mul, zero_mul, pow_one, tsub_self, pow_zero, left_eq_ite_iff, not_le, ite_eq_right_iff,
+      mul_eq_zero, exp_ne_zero, or_false]
+    intro h₀ h₁
+    linarith
+  rw [this]
+  simp_rw [ht] -- need to say "we may assume 0 ≤ t" here
+
+  subst β
+  simp_rw [mul_sub]
+  simp only [mul_one, inv_one, pow_one, Gamma_one, div_one, tsub_self, pow_zero, one_mul,
+    neg_add_rev, one_pow, add_sub_cancel_right, inv_div, mul_ite, ite_mul, zero_mul, mul_zero]
+  field_simp
+  simp_rw [mul_sub]
+  simp_rw [← exp_add]
+  have (t : ℝ) : ((α - c) * (u + c * t) / c + -(α * (u + c * t) / c))
+               = (-1) * (u + c * t):= by
+    field_simp
+    ring_nf
+  simp_rw [this]
+  simp_rw [exp_add]
+  simp only [mul_one, neg_mul, one_mul, neg_add_rev]
+  have (t : ℝ) : α * rexp (-(α * t)) * rexp (-(c * t) + -u)
+               = α * rexp (-((α * t) + c * t + u)) := by
+    ring_nf
+    rw [mul_assoc]
+    congr
+    rw [← exp_add]
+    apply congrArg
+    linarith
+  simp_rw [this]
+  have (t : ℝ) : α * rexp (-(α * t)) * (rexp (-(c * t)) * rexp (-u))
+               = α * (rexp (-(α * t) + (-(c * t) + -u))) := by
+    rw [exp_add]
+    rw [mul_assoc]
+    rw [exp_add]
+  simp_rw [this]
+  have (t : ℝ) : α * rexp (-(α * t)) * rexp ((α - c) * (u + c * t) / c)
+               = α * rexp (-(α * t) + ((α - c) * (u + c * t) / c)) := by
+    rw [exp_add]
+    rw [mul_assoc]
+  simp_rw [this]
+  simp
+  ring_nf
+  field_simp
+  ring_nf
+  field_simp
+  simp_rw [hitemul]
+  simp_rw [hite]
+  rw [integral_const_mul]
+  rw [integral_sub]
+  · have (f : ℝ → ℝ) :
+        (∫ a, if 0 ≤ a then (if 0 ≤ a then f a else 0) else 0)
+        =
+        (∫ a, (if 0 ≤ a then f a else 0))
+        := by
+        congr
+        ext a
+        simp only [ite_eq_left_iff, not_le, right_eq_ite_iff]
+        intro h₀ h₁
+        linarith
+    repeat rw [this]
+    have : (∫ (a : ℝ), if 0 ≤ a then rexp (-(α * a)) else 0)
+      =
+      ∫ (a : ℝ), (1 / α) * exponentialPDFReal α a := by
+        unfold exponentialPDFReal gammaPDFReal
+        simp only [one_div, rpow_one, Gamma_one, div_one, sub_self, rpow_zero, mul_one, mul_ite,
+          mul_zero]
+        congr
+        ext a
+        ring_nf
+        field_simp
+    simp_rw [this]
+    rw [integral_const_mul]
+    have : (∫ (a : ℝ), exponentialPDFReal α a) = 1 := by
+      refine integral_exponentialPDFReal_eq_one α hα
+    rw [this]
+    ring_nf
+    field_simp
+    have (a : ℝ) : (c * (-u - c * a) + α * u) / c
+               = (- c * a) + (-u + α * u / c) := by field_simp;ring_nf
+    simp_rw [this]
+    simp_rw [exp_add]
+    have (a : ℝ) : rexp (-c * a) * (rexp (-u) * rexp (α * u / c))
+     =  (rexp (-u) * rexp (α * u / c)) * rexp (-c * a) := by ring_nf
+    simp_rw [this]
+    simp_rw [hitemul]
+    rw [integral_const_mul]
+    have : (∫ (a : ℝ), if 0 ≤ a then rexp (-c * a) else 0)
+    =
+    ∫ (a : ℝ), (1/c) * exponentialPDFReal c a := by
+        unfold exponentialPDFReal gammaPDFReal
+        simp only [neg_mul, one_div, rpow_one, Gamma_one, div_one, sub_self, rpow_zero, mul_one,
+          mul_ite, mul_zero]
+        congr
+        ext a
+        congr
+        field_simp
+    simp_rw [this]
+    rw [integral_const_mul]
+    field_simp
+    have :  ∫ (a : ℝ), exponentialPDFReal c a = 1 := by
+      refine integral_exponentialPDFReal_eq_one c hc
+    rw [this]
+    simp only [mul_one, sub_right_inj]
+    rw [mul_assoc]
+    congr
+    rw [← exp_add]
+    congr
+    field_simp -- wow!
+
+  · suffices Integrable (fun a ↦ if 0 ≤ a then rexp (-(α * a)) else 0) volume
+        by convert this using 1;ext a;simp;intro h₀ h₁;linarith
+    suffices Integrable (exponentialPDFReal α) volume by
+      unfold exponentialPDFReal gammaPDFReal at this
+      simp at this
+      simp_rw [hitemul] at this
+      rw [integrable_const_mul_iff] at this
+      exact this
+      refine isUnit_iff_exists_inv.mpr ?_
+      use α⁻¹
+      field_simp
+    refine exponentialPDFReal_integrable hα
+  · suffices Integrable (fun a ↦ if 0 ≤ a then rexp ((c * (-u - c * a) + α * u) / c) else 0) volume
+        by
+        convert this using 1
+        ext a
+        split_ifs with g₀
+        simp
+        field_simp
+    have (a : ℝ) :
+        ((c * (-u - c * a) + α * u) / c)
+        =
+        (( - c * a) + (α * u / c - u))
+        := by ring_nf;field_simp;ring_nf
+    simp_rw [this]
+    simp_rw [exp_add]
+    simp_rw [mul_comm]
+    simp_rw [hitemul]
+    rw [integrable_const_mul_iff]
+    suffices Integrable (exponentialPDFReal c) volume by
+      unfold exponentialPDFReal gammaPDFReal at this
+      simp at this
+      simp_rw [hitemul] at this
+      rw [integrable_const_mul_iff] at this
+      convert this using 1
+      ext a
+      congr
+      linarith
+      refine isUnit_iff_exists_inv.mpr ?_
+      use c⁻¹
+      field_simp
+    exact exponentialPDFReal_integrable hc
+    refine isUnit_iff_exists_inv.mpr ?_
+    use (rexp (α * u / c - u))⁻¹
+    field_simp
