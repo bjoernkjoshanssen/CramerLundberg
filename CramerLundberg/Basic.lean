@@ -484,6 +484,84 @@ def integralEquation (α β c : ℝ) (φ : ℝ → ℝ) :=
   ∀ u ≥ 0, φ u = ∫ t, exponentialPDFReal α t * ∫ x in Set.Iic (u + c * t),
     φ (u + c * t - x) * exponentialPDFReal β x
 
+lemma integralEquaton_invariance (α β c d : ℝ) (φ : ℝ → ℝ) (h : integralEquation α β c φ)
+    (hd : 0 < d)
+    :
+    integralEquation (α*d) (β*d) (c*d) (fun u => φ (u/d)) := by
+
+    unfold integralEquation at *
+    simp
+    have hex (x γ : ℝ) : exponentialPDFReal (γ*d) x
+        = (d) * exponentialPDFReal γ (x*d) := by
+      unfold exponentialPDFReal gammaPDFReal
+      simp
+      split_ifs with g₀ g₁ g₂
+      · ring_nf
+      · exfalso;apply g₁;apply mul_nonneg <;> linarith
+      · exfalso
+        revert g₂
+        simp at g₀ ⊢
+        exact mul_neg_of_neg_of_pos g₀ hd
+      · rfl
+    intro u hu
+    rw [h]
+    repeat simp_rw [hex]
+    have hii (t : ℝ) := @integral_indicator ℝ ℝ
+        Real.measurableSpace _ _
+        (fun x =>  φ ((u + c * d * t - x) / d) * (d * exponentialPDFReal β (x * d)))
+        (Set.Iic (u+c*d*t)) volume (by simp)
+    simp_rw [← hii]
+    have hi := @integral_comp_mul_left ℝ _ _
+    sorry
+    -- have hh (x t : ℝ) :
+    --     (u + c * d * t - x) / d
+    --     =
+    --     ((u + c * d * t) / d)
+    --     -
+    --     ((1/d) * (x))
+
+    --     := by ring_nf
+    -- simp_rw [hh]
+    -- have (t : ℝ) := @integral_indicator ℝ ℝ
+    --     Real.measurableSpace _ _
+    --     (fun x => φ ((u + c * d * t) / d - 1 / d * x) * exponentialPDFReal (β * d) x)
+    --     (Set.Iic (u+c*d*t))
+    --     volume (by simp)
+    --     -- (s := Set.Iic (u+c*d*t))
+    --     -- (f := fun x => φ ((u + c * d * t) / d - 1 / d * x) * exponentialPDFReal (β * d) x)
+    -- simp_rw [← this]
+    -- conv =>
+    -- right
+    -- right
+    -- change fun t ↦
+    --     exponentialPDFReal (α * d) t *
+    --         ∫ (x : ℝ),
+    --         (Set.Iic (u + c * d * t)).indicator (fun x ↦ φ ((u + c * d * t) / d - 1 / d * x) * exponentialPDFReal (β * d) x)
+    --             x -- just removing the ∂volume
+    -- have hi := @integral_comp_mul_left ℝ _ _ (a := 1 / d)
+    -- have hi (t : ℝ) := hi (
+    --     (Set.Iic (u + c * d * t)).indicator
+    --         (fun x ↦ φ ((u + c * d * t) / d - 1 / d * x)
+    --             * exponentialPDFReal (β * d) x))
+    -- simp at this
+    -- have hyz (y z : ℝ) : |d| * y = |d| * z → y = z := by sorry
+    -- apply hyz
+    -- rw [← integral_const_mul]
+    -- simp_rw [← mul_assoc]
+    -- simp_rw [mul_comm (a := |d|) (b := exponentialPDFReal (α * d) _)]
+    -- simp_rw [mul_assoc]
+    -- have (a : ℝ) : (u + c * (d * a))
+    --     = (u + c * d * a) := by sorry
+    -- simp_rw [this]
+    -- have : 1 / d = d⁻¹ := sorry
+    -- rw [this]
+    -- simp at hi
+    -- simp_rw [← hi] -- Yes!
+    -- specialize h (u/d) (by sorry)
+    -- rw [h]
+
+    sorry
+
 lemma exists_solution (α β c : ℝ) :
     ∃ φ, integralEquation α β c φ := by
   use 0
@@ -527,78 +605,73 @@ lemma too_fair (α β c : ℝ) (φ : ℝ → ℝ) (hα : α ≠ 0)
   simp [integralEquation]
 open Real
 
-/-- This verifies a claim from Wikipedia at the end of
-https://en.wikipedia.org/wiki/Ruin_theory#Classical_model
--/
-lemma ruin_theory_classical_model_solution {α β c : ℝ} {φ : ℝ → ℝ}
-    (hα : 0 < α) (hc : 0 < c) (hβ : β = 1) -- we may assume
-    (h : φ = fun u => 1 - ((α * β) / c) * Real.exp (-(1 / β - α / c) * u)) :
-    integralEquation α β c φ := by
-  have what : β⁻¹ < α / c + β := by
-    rw [hβ]
-    simp_all
-  have gen₂ : (β * (α + c * β) - c) ≠ 0 := by
-    rw [hβ]
-    simp
-    linarith
-  have gen₁ : (c - β * (α + β * c)) ≠ 0 := by
-    rw [hβ]
-    simp
-    linarith
-  have gen₀ : (β⁻¹ - (α / c + β)) ≠ 0 := by
-    rw [hβ]
-    simp
-    constructor <;> linarith
-  have hite (x y z : ℝ) :
+lemma itemul
+(x y z : ℝ)
+: (if 0 ≤ x then y * z else 0) = y * if 0 ≤ x then z else 0 := by
+    split_ifs  <;> simp
+
+lemma ite_sub' (x y z : ℝ) :
     (if (0 ≤ x) then (y - z) else 0) =
     (if (0 ≤ x) then y else 0) -
     (if (0 ≤ x) then z else 0) := by
     split_ifs  <;> simp
-  have hitemul (x y z : ℝ) :
-    (if (0 ≤ x) then (y * z) else 0) =
-    y * (if (0 ≤ x) then z else 0) := by
-    split_ifs  <;> simp
-  intro u hu
-  rw [h]
-  simp only [one_div, neg_sub]
-  have ht (t : ℝ) :
-    (if 0 ≤ t then (∫ (x : ℝ) in Set.Iic (u + c * t),
-        (1 - α * β / c * Real.exp ((α / c - β⁻¹) *
-        (u + c * t - x))) * exponentialPDFReal β x) else 0)
-        =  if 0 ≤ t then (1 - rexp (-(β * (u + c * t))) -
-    α * β ^ 2 / c * rexp ((α / c - β⁻¹) * (u + c * t)) *
-      ((α / c + β - β⁻¹)⁻¹ * (1 - rexp (-((α / c + β - β⁻¹) * (u + c * t)))))) else 0 := by
+
+
+lemma ite_ite (f : ℝ → ℝ) :
+        (∫ a, if 0 ≤ a then (if 0 ≤ a then f a else 0) else 0)
+        =
+        (∫ a, (if 0 ≤ a then f a else 0))
+        := by
+        congr
+        ext a
+        simp only [ite_eq_left_iff, not_le, right_eq_ite_iff]
+        intro h₀ h₁
+        linarith
+
+
+lemma integrableExp (δ : ℝ) (hδ : δ < 0) :
+    Integrable (fun x ↦ if 0 ≤ x then rexp (δ * x) else 0) volume := by
+  suffices Integrable (exponentialPDFReal (-δ)) volume by
+    unfold exponentialPDFReal gammaPDFReal at this
+    simp only [rpow_one, Gamma_one, div_one, sub_self, rpow_zero, mul_one] at this
+    simp_rw [itemul] at this
+    rw [integrable_const_mul_iff] at this
+    · ring_nf at this ⊢
+      exact this
+    · refine isUnit_iff_exists_inv.mpr ?_
+      use (-δ)⁻¹
+      field_simp
+      simp
+      linarith
+  refine exponentialPDFReal_integrable (show 0 < -δ by linarith)
+
+lemma ruin_rewrite {α β c : ℝ} (hα : 0 < α) (hc : 0 < c)
+  (hβ : β = 1) (what : β⁻¹ < α / c + β)
+  (gen₂ : β * (α + c * β) - c ≠ 0) {u : ℝ} (hu : u ≥ 0) (t : ℝ) :
+  (if 0 ≤ t then
+      ∫ (x : ℝ) in Set.Iic (u + c * t),
+        (1 - α * β / c * rexp ((α / c - β⁻¹) * (u + c * t - x))) * exponentialPDFReal β x
+    else 0) =
+    if 0 ≤ t then
+      1 - rexp (-(β * (u + c * t))) -
+        α * β ^ 2 / c * rexp ((α / c - β⁻¹) * (u + c * t)) *
+          ((α / c + β - β⁻¹)⁻¹ * (1 - rexp (-((α / c + β - β⁻¹) * (u + c * t)))))
+    else 0 := by
+
       split_ifs with g₀
       · unfold exponentialPDFReal gammaPDFReal
         simp only [rpow_one, Gamma_one, div_one, sub_self, rpow_zero, mul_one, mul_ite, mul_zero]
         simp_rw [sub_mul]
         simp only [one_mul, neg_sub]
-        have (x : ℝ) :
-            α * β / c * rexp (α / c * (u + c * t - x) - β⁻¹ *
-            (u + c * t - x)) * (β * rexp (-(β * x)))
-            =
-            α * β ^ 2 / c * rexp (α / c * (u + c * t - x) - β⁻¹ * (u + c * t - x)
-            ) * (rexp (-(β * x)))        := by
-                    ring_nf
+        have (x z : ℝ) : α * β / c * z * (β * rexp (-(β * x)))
+                       = α * β ^ 2 / c * z * (rexp (-(β * x))) := by ring_nf
         simp_rw [this]
-        have (x : ℝ) :
-            α * β ^ 2 / c * rexp (α / c * (u + c * t - x) - β⁻¹ * (u + c * t - x)) * rexp (-(β * x))
-            =
-            α * β ^ 2 / c * (rexp (α / c * (u + c * t - x) - β⁻¹ * (u + c * t - x))
-                        * rexp (-(β * x)))
-            := by ring_nf
-        simp_rw [this]
+        simp_rw [mul_assoc]
         simp_rw [← exp_add]
-        have (x : ℝ) :
-        α / c * (u + c * t - x)
-        =
-        (α / c * (u + c * t))
-        -
-        α / c * (x)
-        := by nth_rw 1 [mul_sub]
+        have (x : ℝ) : α / c * (u + c * t - x) =
+                      (α / c * (u + c * t)) - α / c * (x) := by nth_rw 1 [mul_sub]
         simp_rw [this]
-        simp_rw [hite]
-
+        simp_rw [ite_sub']
         rw [integral_sub]
         · have : (∫ (a : ℝ) in Set.Iic (u + c * t),
             if 0 ≤ a then β * rexp (-(β * a)) else 0)
@@ -608,25 +681,16 @@ lemma ruin_theory_classical_model_solution {α β c : ℝ} {φ : ℝ → ℝ}
           rw [this]
           rw [← ProbabilityTheory.cdf_expMeasure_eq_integral]
           · rw [cdf_expMeasure_eq]
-            · have (a : ℝ) :  (α / c * (u + c * t) - α / c * a - β⁻¹ * (u + c * t - a) + -(β * a))
-                =
-                ((α / c - β⁻¹) * (u + c * t)
-                + (β⁻¹ - (α / c + β)) * a)
-                := by
+            · have (a : ℝ) : (α / c * (u + c * t) - α / c * a - β⁻¹ * (u + c * t - a) + -(β * a)) =
+                            ((α / c - β⁻¹) * (u + c * t) + (β⁻¹ - (α / c + β)) * a) := by
                     field_simp
                     ring_nf
-
-              simp_rw [this]
-              simp_rw [exp_add]
-              simp_rw [hitemul]
-              simp_rw [← mul_assoc]
+              simp_rw [this, exp_add, itemul, ← mul_assoc]
               rw [integral_const_mul]
               have (a : ℝ) :
                 (if 0 ≤ a then rexp ((β⁻¹ - (α / c + β)) * a) else 0)
-                =
-                (-(β⁻¹ - (α / c + β)))⁻¹ *
-                exponentialPDFReal (-(β⁻¹ - (α / c + β))) a
-                := by
+                = (-(β⁻¹ - (α / c + β)))⁻¹ *
+                exponentialPDFReal (-(β⁻¹ - (α / c + β))) a := by
                     unfold exponentialPDFReal gammaPDFReal
                     simp
                     field_simp
@@ -660,162 +724,158 @@ lemma ruin_theory_classical_model_solution {α β c : ℝ} {φ : ℝ → ℝ}
           rw [hβ]
           simp
         · refine Integrable.restrict ?_
-          simp_rw [hitemul]
+          simp_rw [itemul]
           rw [integrable_const_mul_iff]
-          -- rewrite the exponent as usual
-          rw [hβ]
-          simp
-          ring_nf
-          field_simp
-          have (x : ℝ) :
-          ((α * (c * t + u - x) - c ^ 2 * t - c * u) / c)
-          =
-            (α / c - 1) * (c * t + u)
-            + (-α / c) * (x)
-
-          := by field_simp;ring_nf
-          simp_rw [this]
-          simp_rw [exp_add]
-          simp_rw [hitemul]
-          rw [integrable_const_mul_iff]
-          suffices Integrable (exponentialPDFReal (α/c)) volume by
-            unfold exponentialPDFReal gammaPDFReal at this
-            simp at this
-            simp_rw [hitemul] at this
-            rw [integrable_const_mul_iff] at this
-            ring_nf at this ⊢
-            exact this
-            refine isUnit_iff_exists_inv.mpr ?_
-            use (α/c)⁻¹
+          · -- rewrite the exponent as usual
+            rw [hβ]
+            simp
+            ring_nf
             field_simp
-          refine exponentialPDFReal_integrable ?_
-          apply div_pos
-          linarith
-          linarith
-          refine isUnit_iff_exists_inv.mpr ?_
-          use (rexp ((α / c - 1) * (c * t + u)))⁻¹
-          field_simp
+            have (x : ℝ) :
+                ((α * (c * t + u - x) - c ^ 2 * t - c * u) / c)
+                = (α / c - 1) * (c * t + u) + (-α / c) * (x) := by
+                    field_simp;ring_nf
+            simp_rw [this]
+            simp_rw [exp_add]
+            simp_rw [itemul]
+            rw [integrable_const_mul_iff]
+            · apply integrableExp
+              suffices - (α / c) < 0 by rw [neg_div];exact this
+              simp only [Left.neg_neg_iff]
+              apply div_pos <;> linarith
+            · refine isUnit_iff_exists_inv.mpr ?_
+              use (rexp ((α / c - 1) * (c * t + u)))⁻¹
+              field_simp
           rw [hβ]
           simp
           constructor <;> linarith
       · rfl
 
-  have hCongr (f g : ℝ → ℝ) (A : Set ℝ) (hA : MeasurableSet A)
-    (h : ∀ x ∈ A, f x = g x) : ∫ x in A, f x = ∫ x in A, g x := by
-
-    repeat rw [← integral_indicator]
-    · congr
-      ext x
-      simp only [Set.indicator]
-      split_ifs with g₀
-      · rw [h]; exact g₀
-      · rfl
-    · exact hA
-    · exact hA
-  have :  ∫ (t : ℝ),
-    exponentialPDFReal α t *
-      ∫ (x : ℝ) in Set.Iic (u + c * t),
-        (1 - α * β / c * rexp ((α / c - β⁻¹) * (u + c * t - x))) * exponentialPDFReal β x
-      =
-       ∫ (t : ℝ),
-    ( (if 0 ≤ t then α ^ 1 / Gamma 1 * t ^ (1 - 1) * rexp (-(α * t)) else 0)) *
-      if 0 ≤ t then ∫ (x : ℝ) in Set.Iic (u + c * t),
-        (1 - α * β / c * rexp ((α / c - β⁻¹) * (u + c * t - x))) * exponentialPDFReal β x else 0
-        := by
-    unfold exponentialPDFReal gammaPDFReal
-    congr
-    ext t
-    simp only [rpow_one, Gamma_one, div_one, sub_self, rpow_zero, mul_one, mul_ite, mul_zero,
-      ite_mul, zero_mul, pow_one, tsub_self, pow_zero, left_eq_ite_iff, not_le, ite_eq_right_iff,
-      mul_eq_zero, exp_ne_zero, or_false]
-    intro h₀ h₁
+theorem ruin_integrable {α : ℝ} (hα : 0 < α) :
+  Integrable (fun a ↦ if 0 ≤ a then if 0 ≤ a then rexp (-(α * a)) else 0 else 0) volume := by
+    suffices Integrable (fun a ↦ if 0 ≤ a then rexp (-(α * a)) else 0) volume by
+        convert this using 1
+        ext a
+        simp only [ite_eq_left_iff, not_le, right_eq_ite_iff]
+        intro h₀ h₁
+        linarith
+    have (a : ℝ) : - (α * a) = -α * a := by ring_nf
+    simp_rw [this]
+    apply integrableExp
+    simp
     linarith
-  rw [this]
-  simp_rw [ht] -- need to say "we may assume 0 ≤ t" here
 
-  subst β
-  simp_rw [mul_sub]
-  simp only [mul_one, inv_one, pow_one, Gamma_one, div_one, tsub_self, pow_zero, one_mul,
-    neg_add_rev, one_pow, add_sub_cancel_right, inv_div, mul_ite, ite_mul, zero_mul, mul_zero]
-  field_simp
-  simp_rw [mul_sub]
-  simp_rw [← exp_add]
-  have (t : ℝ) : ((α - c) * (u + c * t) / c + -(α * (u + c * t) / c))
-               = (-1) * (u + c * t):= by
-    field_simp
-    ring_nf
-  simp_rw [this]
-  simp_rw [exp_add]
-  simp only [mul_one, neg_mul, one_mul, neg_add_rev]
-  have (t : ℝ) : α * rexp (-(α * t)) * rexp (-(c * t) + -u)
+theorem ruin_integrable' {α c : ℝ} (hc : 0 < c) (u : ℝ) :
+  Integrable (fun a ↦ if 0 ≤ a then
+    if 0 ≤ a then rexp ((c * (-u - c * a) + α * u) / c) else 0 else 0) volume := by
+    suffices Integrable (fun a ↦ if 0 ≤ a then rexp ((c * (-u - c * a) + α * u) / c) else 0) volume
+        by
+        convert this using 1
+        ext a
+        split_ifs <;> field_simp
+    have (a : ℝ) : (c * (-u - c * a) + α * u) / c =
+                    -c * a + (α * u / c - u) := by
+        ring_nf;field_simp;ring_nf
+    simp_rw [this]
+    simp_rw [exp_add]
+    simp_rw [mul_comm]
+    simp_rw [itemul]
+    rw [integrable_const_mul_iff]
+    · have (a : ℝ) : a * -c = -c * a := by rw [mul_comm]
+      simp_rw [this]
+      apply integrableExp
+      linarith
+    · refine isUnit_iff_exists_inv.mpr ?_
+      use (rexp (α * u / c - u))⁻¹
+      field_simp
+
+lemma split_ite {α β c : ℝ} (u : ℝ) :
+  ∫ (t : ℝ),
+      exponentialPDFReal α t *
+        ∫ (x : ℝ) in Set.Iic (u + c * t),
+          (1 - α * β / c * rexp ((α / c - β⁻¹) * (u + c * t - x))) * exponentialPDFReal β x =
+    ∫ (t : ℝ),
+      (if 0 ≤ t then α ^ 1 / Gamma 1 * t ^ (1 - 1) * rexp (-(α * t)) else 0) *
+        if 0 ≤ t then
+          ∫ (x : ℝ) in Set.Iic (u + c * t),
+            (1 - α * β / c * rexp ((α / c - β⁻¹) * (u + c * t - x))) * exponentialPDFReal β x
+        else 0 := by
+        unfold exponentialPDFReal gammaPDFReal
+        congr
+        ext t
+        simp only [rpow_one, Gamma_one, div_one, sub_self, rpow_zero, mul_one, mul_ite, mul_zero,
+        ite_mul, zero_mul, pow_one, tsub_self, pow_zero, left_eq_ite_iff, not_le, ite_eq_right_iff,
+        mul_eq_zero, exp_ne_zero, or_false]
+        intro h₀ h₁
+        linarith
+
+/-- This verifies a claim from Wikipedia at the end of
+https://en.wikipedia.org/wiki/Ruin_theory#Classical_model
+β = claim size limitation rate (1 / $); 1/β=E(claim size) = $ = μ
+λ = α = claim arrival rate (1/time); 1/α=E(claim time)=time
+u = initial capital
+φ(u)=nonruin probability
+
+Units checK;
+λ = 1 / hour        = α
+c = $ / hour
+λ / c = 1 / $
+μ = $               = 1 / β
+λ μ / c = 1         = α / (β * c)
+1/μ - λ/c = 1/$ - 1/$
+The following lemma is correct but was written
+with an incorrect generalization in mind so it looks complicated.
+-/
+lemma ruin_theory_classical_model_solution₁ {α c : ℝ} {φ : ℝ → ℝ}
+    (hα : 0 < α) (hc : 0 < c)
+    (h : φ = fun u => 1 - ((α * 1) / c) * Real.exp (-(1 / 1 - α / c) * u)) :
+    integralEquation α 1 c φ := by
+  unfold integralEquation
+  have what : 1⁻¹ < α / c + 1 := by
+    simp_all
+  have gen₂ : (1 * (α + c * 1) - c) ≠ 0 := by
+    have : 1 * 1⁻¹ < 1 * (α / c + 1) :=
+        mul_lt_mul_of_nonneg_of_pos' (by simp) what (by simp) (by linarith)
+    field_simp at this
+    linarith
+  intro u hu
+  have g₀ (t : ℝ) : ((α - c) * (u + c * t) / c + -(α * (u + c * t) / c))
+               = (-1) * (u + c * t):= by field_simp; ring_nf
+  have g₁ (t : ℝ) : α * rexp (-(α * t)) * rexp (-(c * t) + -u)
                = α * rexp (-((α * t) + c * t + u)) := by
-    ring_nf
     rw [mul_assoc]
     congr
     rw [← exp_add]
     apply congrArg
     linarith
-  simp_rw [this]
-  have (t : ℝ) : α * rexp (-(α * t)) * (rexp (-(c * t)) * rexp (-u))
+  have g₂ (t : ℝ) : α * rexp (-(α * t)) * (rexp (-(c * t)) * rexp (-u))
                = α * (rexp (-(α * t) + (-(c * t) + -u))) := by
-    rw [exp_add]
-    rw [mul_assoc]
-    rw [exp_add]
-  simp_rw [this]
-  have (t : ℝ) : α * rexp (-(α * t)) * rexp ((α - c) * (u + c * t) / c)
+    rw [exp_add, mul_assoc, exp_add]
+  have g₃ (t : ℝ) : α * rexp (-(α * t)) * rexp ((α - c) * (u + c * t) / c)
                = α * rexp (-(α * t) + ((α - c) * (u + c * t) / c)) := by
-    rw [exp_add]
-    rw [mul_assoc]
-  simp_rw [this]
-  simp
-  ring_nf
+    rw [exp_add, mul_assoc]
+  rw [h]
+  simp only [one_div, neg_sub]
+  rw [split_ite]
+  simp_rw [ruin_rewrite hα hc (by sorry) what gen₂ hu, mul_sub]
+  simp only [pow_one, Gamma_one, div_one, tsub_self, pow_zero, mul_one, mul_ite, ite_mul, zero_mul,
+    mul_zero]
+  field_simp
+  simp only [mul_one, one_mul, neg_add_rev, one_pow, add_sub_cancel_right]
+  field_simp
+  simp_rw [mul_sub, ← exp_add, g₀, exp_add, mul_one, neg_mul, one_mul, neg_add_rev, g₁, g₂, g₃]
   field_simp
   ring_nf
   field_simp
-  simp_rw [hitemul]
-  simp_rw [hite]
-  rw [integral_const_mul]
-  rw [integral_sub]
-  · have (f : ℝ → ℝ) :
-        (∫ a, if 0 ≤ a then (if 0 ≤ a then f a else 0) else 0)
-        =
-        (∫ a, (if 0 ≤ a then f a else 0))
-        := by
-        congr
-        ext a
-        simp only [ite_eq_left_iff, not_le, right_eq_ite_iff]
-        intro h₀ h₁
-        linarith
-    repeat rw [this]
-    have : (∫ (a : ℝ), if 0 ≤ a then rexp (-(α * a)) else 0)
-      =
-      ∫ (a : ℝ), (1 / α) * exponentialPDFReal α a := by
-        unfold exponentialPDFReal gammaPDFReal
-        simp only [one_div, rpow_one, Gamma_one, div_one, sub_self, rpow_zero, mul_one, mul_ite,
-          mul_zero]
-        congr
-        ext a
-        ring_nf
-        field_simp
-    simp_rw [this]
-    rw [integral_const_mul]
-    have : (∫ (a : ℝ), exponentialPDFReal α a) = 1 := by
-      refine integral_exponentialPDFReal_eq_one α hα
-    rw [this]
-    ring_nf
-    field_simp
-    have (a : ℝ) : (c * (-u - c * a) + α * u) / c
+  simp_rw [itemul, ite_sub']
+  rw [integral_const_mul, integral_sub]
+  · repeat rw [ite_ite]
+    have h₀ (a : ℝ) : (c * (-u - c * a) + α * u) / c
                = (- c * a) + (-u + α * u / c) := by field_simp;ring_nf
-    simp_rw [this]
-    simp_rw [exp_add]
-    have (a : ℝ) : rexp (-c * a) * (rexp (-u) * rexp (α * u / c))
+    have h₁ (a : ℝ) : rexp (-c * a) * (rexp (-u) * rexp (α * u / c))
      =  (rexp (-u) * rexp (α * u / c)) * rexp (-c * a) := by ring_nf
-    simp_rw [this]
-    simp_rw [hitemul]
-    rw [integral_const_mul]
-    have : (∫ (a : ℝ), if 0 ≤ a then rexp (-c * a) else 0)
-    =
-    ∫ (a : ℝ), (1/c) * exponentialPDFReal c a := by
+    have h₂ : (∫ (a : ℝ), if 0 ≤ a then rexp (-c * a) else 0) =
+            ∫ (a : ℝ), (1/c) * exponentialPDFReal c a := by
         unfold exponentialPDFReal gammaPDFReal
         simp only [neg_mul, one_div, rpow_one, Gamma_one, div_one, sub_self, rpow_zero, mul_one,
           mul_ite, mul_zero]
@@ -823,61 +883,50 @@ lemma ruin_theory_classical_model_solution {α β c : ℝ} {φ : ℝ → ℝ}
         ext a
         congr
         field_simp
-    simp_rw [this]
-    rw [integral_const_mul]
+    have h₃ : (∫ (a : ℝ), if 0 ≤ a then rexp (-(α * a)) else 0) =
+            ∫ (a : ℝ), (1 / α) * exponentialPDFReal α a := by
+        unfold exponentialPDFReal gammaPDFReal
+        simp only [one_div, rpow_one, Gamma_one, div_one, sub_self, rpow_zero, mul_one, mul_ite,
+          mul_zero]
+        congr
+        ext a
+        ring_nf
+        field_simp
+    simp_rw [h₃]
+    rw [integral_const_mul, integral_exponentialPDFReal_eq_one α hα]
+    ring_nf
     field_simp
-    have :  ∫ (a : ℝ), exponentialPDFReal c a = 1 := by
-      refine integral_exponentialPDFReal_eq_one c hc
-    rw [this]
-    simp only [mul_one, sub_right_inj]
-    rw [mul_assoc]
+    simp_rw [h₀, exp_add, h₁, itemul, integral_const_mul, h₂, integral_const_mul]
+    field_simp
+    rw [integral_exponentialPDFReal_eq_one c hc, mul_one, sub_right_inj, mul_assoc]
     congr
     rw [← exp_add]
     congr
     field_simp -- wow!
+  · apply ruin_integrable hα
+  · apply ruin_integrable' <| RCLike.ofReal_pos.mp hc
 
-  · suffices Integrable (fun a ↦ if 0 ≤ a then rexp (-(α * a)) else 0) volume
-        by convert this using 1;ext a;simp;intro h₀ h₁;linarith
-    suffices Integrable (exponentialPDFReal α) volume by
-      unfold exponentialPDFReal gammaPDFReal at this
-      simp at this
-      simp_rw [hitemul] at this
-      rw [integrable_const_mul_iff] at this
-      exact this
-      refine isUnit_iff_exists_inv.mpr ?_
-      use α⁻¹
-      field_simp
-    refine exponentialPDFReal_integrable hα
-  · suffices Integrable (fun a ↦ if 0 ≤ a then rexp ((c * (-u - c * a) + α * u) / c) else 0) volume
-        by
-        convert this using 1
-        ext a
-        split_ifs with g₀
-        simp
-        field_simp
-    have (a : ℝ) :
-        ((c * (-u - c * a) + α * u) / c)
-        =
-        (( - c * a) + (α * u / c - u))
-        := by ring_nf;field_simp;ring_nf
-    simp_rw [this]
-    simp_rw [exp_add]
-    simp_rw [mul_comm]
-    simp_rw [hitemul]
-    rw [integrable_const_mul_iff]
-    suffices Integrable (exponentialPDFReal c) volume by
-      unfold exponentialPDFReal gammaPDFReal at this
-      simp at this
-      simp_rw [hitemul] at this
-      rw [integrable_const_mul_iff] at this
-      convert this using 1
-      ext a
-      congr
-      linarith
-      refine isUnit_iff_exists_inv.mpr ?_
-      use c⁻¹
-      field_simp
-    exact exponentialPDFReal_integrable hc
-    refine isUnit_iff_exists_inv.mpr ?_
-    use (rexp (α * u / c - u))⁻¹
-    field_simp
+
+lemma ruin_theory_classical_model_solution {α β c : ℝ} {φ : ℝ → ℝ}
+    (hα : 0 < α) (hc : 0 < c) (hβ : β = 1)
+    (h : φ = fun u => 1 - (α / (β * c)) * Real.exp (-(β - α / c) * u)) :
+    integralEquation α β c φ := by
+  subst β
+  apply ruin_theory_classical_model_solution₁
+  tauto
+  tauto
+  rw [h]
+  ext u
+  ring_nf
+
+lemma ruin_theory_classical_model_solution' {α β c : ℝ} {φ : ℝ → ℝ}
+    (hα : 0 < α) (hc : 0 < c)
+    (h : φ = fun u => 1 - (α / (β * c)) * Real.exp (-(β - α / c) * u)) :
+    integralEquation α β c φ := by
+  intro u hu
+  rw [h]
+  simp
+  unfold exponentialPDFReal gammaPDFReal
+  simp
+
+  sorry
