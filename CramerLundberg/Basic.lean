@@ -2,6 +2,9 @@ import Mathlib.Probability.Distributions.Exponential
 import Mathlib.MeasureTheory.Constructions.Pi
 import Mathlib.MeasureTheory.Integral.Gamma
 
+open MeasureTheory ProbabilityTheory Real Set Filter
+open scoped ENNReal BigOperators
+
 /-!
 
 # Cramér-Lundberg distribution
@@ -484,6 +487,18 @@ def integralEquation (α β c : ℝ) (φ : ℝ → ℝ) :=
   ∀ u ≥ 0, φ u = ∫ t, exponentialPDFReal α t * ∫ x in Set.Iic (u + c * t),
     φ (u + c * t - x) * exponentialPDFReal β x
 
+lemma integralEquation_variant (α β c : ℝ) (φ : ℝ → ℝ)
+  (hα : 0 < α) (hβ : 0 < β) (hc : 0 < c)
+  (h : Tendsto φ atTop (nhds 1)) -- added by Aristotle
+  (h_net_profit : α < β * c) -- added by Aristotle
+  (hφ : integralEquation α β c φ) :
+  ∀ u ≥ 0, φ u = 1 - α / (β * c) + α / c *
+    ∫ x : ℝ in Set.Icc 0 u, φ (u - x) * (1 - cdf (expMeasure β) x) := by
+  /- the proof requires Fubini's theorem,
+  differentiation under the integral sign, and
+  Volterra equation theory,
+  which are extremely challenging to formalize. -/
+  sorry
 
 lemma exists_solution (α β c : ℝ) :
     ∃ φ, integralEquation α β c φ := by
@@ -551,8 +566,9 @@ c = $ / hour
 μ = $               = 1 / β
 λ μ / c = 1         = α / (β * c)
 1/μ - λ/c = 1/$ - 1/$
-The following lemma is correct but was written
-with an incorrect generalization in mind so it looks complicated.
+
+Viability of the business requires
+`c > λ μ ` i.e., `β * c > α`
 -/
 
 theorem indicator_exp_integrable (u c t β : ℝ) :
@@ -939,3 +955,196 @@ lemma ruin_theory_classical_model_solution {α β c : ℝ} {φ : ℝ → ℝ}
   apply mul_pos
   tauto
   tauto
+
+-- Aristotle work:
+
+/-- exponentialPDFReal simplification for nonneg argument -/
+lemma exponentialPDFReal_of_nonneg {r x : ℝ} (hx : 0 ≤ x) :
+    exponentialPDFReal r x = r * exp (-(r * x)) := by
+  simp [exponentialPDFReal, gammaPDFReal, hx, Gamma_one]
+
+/-- exponentialPDFReal is zero for negative argument -/
+lemma exponentialPDFReal_of_neg {r x : ℝ} (hx : x < 0) :
+    exponentialPDFReal r x = 0 := by
+  simp [exponentialPDFReal, gammaPDFReal, not_le.mpr hx]
+
+/-
+The inner integral: ∫_{Iic s} φ(s-x) * exponentialPDFReal β x dx = 1 - exp(-γ s)
+    where φ(y) = 1 - (α/(β*c)) * exp(-γ*y) and γ = β - α/c.
+-/
+lemma inner_integral_eq {α β c s : ℝ} (hα : 0 < α) (hβ : 0 < β) (hc : 0 < c) (hs : 0 ≤ s) :
+    ∫ x in Iic s,
+      (1 - α / (β * c) * exp (-(β - α / c) * (s - x))) * (exponentialPDFReal β x) =
+    1 - exp (-(β - α / c) * s) := by
+  -- Split the integral into two parts: from negative infinity to 0 and from 0 to s.
+  have h_split : ∫ x in Iic s, (1 - α / (β * c) * Real.exp (-(β - α / c) * (s - x))) * exponentialPDFReal β x = (∫ x in Set.Icc 0 s, (1 - α / (β * c) * Real.exp (-(β - α / c) * (s - x))) * β * Real.exp (-β * x)) := by
+    rw [ ← MeasureTheory.integral_indicator, ← MeasureTheory.integral_indicator ] <;> norm_num [ Set.indicator ];
+    congr with x ; split_ifs <;> simp_all +decide [ mul_assoc, mul_comm, mul_left_comm, exponentialPDFReal_of_nonneg, exponentialPDFReal_of_neg ];
+  convert h_split using 1;
+  rw [ MeasureTheory.integral_Icc_eq_integral_Ioc, ← intervalIntegral.integral_of_le hs ] ; ring;
+  rw [ intervalIntegral.integral_add ] <;> norm_num [ mul_assoc, mul_comm β, hβ.ne', ← Real.exp_add ] ; ring;
+  · simp_rw [fun x => add_sub_assoc -- added by Bjørn
+      (-(s * β)) (s * α * c⁻¹) (α * c⁻¹ * x)]
+    rw [ intervalIntegral.integral_comp_mul_left
+      ( fun x => Real.exp ( -x ) ),
+      @intervalIntegral.integral_comp_sub_mul
+      (f := fun x => Real.exp ( - ( s * β ) + x ) ) ℝ Real.normedAddCommGroup
+        _ _ _ _ _ _  ]
+      <;> norm_num [ hβ.ne', hc.ne' ] ; ring_nf;
+    · -- Combine like terms and simplify the expression.
+      field_simp
+      ring;
+    · positivity;
+  · exact Continuous.intervalIntegrable ( by continuity ) _ _;
+  · exact Continuous.intervalIntegrable ( by continuity ) _ _
+
+/-
+The outer integral: ∫ exponentialPDFReal α t * f(u + c*t) dt for the specific f.
+-/
+lemma outer_integral_eq {α β c u : ℝ} (hα : 0 < α) (hβ : 0 < β) (hc : 0 < c) :
+    ∫ t, exponentialPDFReal α t *
+      (1 - exp (-(β - α / c) * (u + c * t))) =
+    1 - α / (β * c) * exp (-(β - α / c) * u) := by
+  -- Split the integral into two parts: one over $(-\infty, 0)$ and one over $[0, \infty)$.
+  have h_split : ∫ t, exponentialPDFReal α t * (1 - Real.exp (-(β - α / c) * (u + c * t))) = (∫ t in Set.Ici 0, exponentialPDFReal α t * (1 - Real.exp (-(β - α / c) * (u + c * t)))) := by
+    rw [MeasureTheory.setIntegral_eq_integral_of_forall_compl_eq_zero];
+    simp +contextual [exponentialPDFReal_of_neg];
+  -- Evaluate the part of the integral over $[0, \infty)$.
+  have h_eval : ∫ t in Set.Ici 0, exponentialPDFReal α t * (1 - Real.exp (-(β - α / c) * (u + c * t))) = (∫ t in Set.Ici 0, α * Real.exp (-α * t)) - (∫ t in Set.Ici 0, α * Real.exp (-(α + c * (β - α / c)) * t) * Real.exp (-(β - α / c) * u)) := by
+    rw [← MeasureTheory.integral_sub] ; refine' MeasureTheory.setIntegral_congr_fun measurableSet_Ici fun t ht => _ ; rw [exponentialPDFReal_of_nonneg ht.out] ; ring;
+    · simpa only [mul_assoc, ← Real.exp_add] using by ring;
+    · have := (exp_neg_integrableOn_Ioi 0 hα);
+      simpa only [MeasureTheory.IntegrableOn, MeasureTheory.Measure.restrict_congr_set MeasureTheory.Ioi_ae_eq_Ici] using this.const_mul α;
+    · -- The integral of the exponential function is convergent.
+      have h_exp_conv : ∫ t in Set.Ici 0, Real.exp (-(α + c * (β - α / c)) * t) = 1 / (α + c * (β - α / c)) := by
+        rw [MeasureTheory.integral_Ici_eq_integral_Ioi] ; have := integral_exp_neg_mul_rpow zero_lt_one (show 0 < α + c * (β - α / c) by nlinarith [mul_div_cancel₀ α hc.ne']) ; norm_num [Real.rpow_neg_one] at this ⊢ ; aesop;
+      exact MeasureTheory.Integrable.mul_const (MeasureTheory.Integrable.const_mul (by exact (by contrapose! h_exp_conv; rw [MeasureTheory.integral_undef h_exp_conv] ; norm_num; nlinarith [mul_div_cancel₀ α hc.ne'])) _) _;
+  -- Evaluate the remaining integrals.
+  have h_integrals : (∫ t in Set.Ici 0, α * Real.exp (-α * t)) = 1 ∧
+    (∫ t in Set.Ici 0, α * Real.exp (-(α + c * (β - α / c)) * t)) = α / (α + c * (β - α / c)) := by
+    constructor <;> rw [MeasureTheory.integral_const_mul]
+        <;> rw [MeasureTheory.integral_Ici_eq_integral_Ioi]
+        <;> have := integral_exp_neg_mul_rpow zero_lt_one
+        (show 0 < α by positivity) <;> have :=
+        integral_exp_neg_mul_rpow zero_lt_one (show 0 < α + c * (β - α / c) by
+        nlinarith [mul_div_cancel₀ α hc.ne']) <;> norm_num [Real.rpow_neg_one] at *;
+    · rw [‹∫ x in Ioi 0, Real.exp (- (α * x)) = α⁻¹›, mul_inv_cancel₀ hα.ne'];
+    · grind;
+  simp_all +decide [MeasureTheory.integral_mul_const];
+  grind
+
+lemma ruin_theory_classical_model_solution_Aristotle {α β c : ℝ} {φ : ℝ → ℝ}
+    (hα : 0 < α) (hc : 0 < c) (hβ : 0 < β)
+    (h : φ = fun u => 1 - (α / (β * c)) * exp (-(β - α / c) * u)) :
+    integralEquation α β c φ := by
+  intro u hu;
+  convert (outer_integral_eq hα hβ hc) using 1;
+  · rw [h, outer_integral_eq hα hβ hc];
+  · convert (outer_integral_eq hα hβ hc) using 1;
+    congr! 2;
+    by_cases h : u + c * ‹ℝ› ≥ 0 <;> simp_all +decide [exponentialPDFReal];
+    · convert Or.inl (inner_integral_eq hα hβ hc h) using 1;
+      unfold exponentialPDFReal gammaPDFReal; ring;
+    · simp_all +decide [gammaPDFReal];
+      exact Or.inr fun _ => by nlinarith;
+
+/-- This lemma points out that the
+solutino to the `integralEquation` does in fact
+tend to 1 at `∞`, as suggested by `Aristotle`. -/
+lemma ruin_theory_tendsto {α β c : ℝ}
+    (hc : 0 < c) (h' : α < β * c) :
+    Tendsto (fun u => 1 - (α / (β * c)) * exp (-(β - α / c) * u)) atTop (nhds 1) := by
+  simp only [neg_sub]
+  rw [← tendsto_sub_const_iff (b := 1)]
+  simp only [sub_sub_cancel_left, sub_self]
+  have h₀ : α / c - β < 0 := by field_simp;linarith
+  generalize α / (β * c) = A at *
+  generalize α / c - β = B at *
+  suffices Tendsto (fun u ↦ -(A * rexp (B * u))) atTop (nhds (-0)) by
+    convert this
+    simp
+  suffices Tendsto (fun u ↦ (A * rexp (B * u))) atTop (nhds 0) by
+    exact Tendsto.neg this
+  have := @Tendsto.mul ℝ _ _ _ ℝ (fun _ => A)
+    (fun u => rexp (B * u)) atTop A 0 tendsto_const_nhds
+    (by
+    refine tendsto_exp_comp_nhds_zero.mpr ?_;refine tendsto_atTop_atBot_of_antitone ?_ ?_
+    · intro x y hxy
+      exact (mul_le_mul_left_of_neg h₀).mpr hxy
+    · intro r
+      use r / B
+      have : B ≠ 0 := by linarith
+      apply le_of_eq
+      field_simp)
+  convert this
+  simp
+
+-- Here we do not need 0 < α.
+lemma ruin_theory_tendsto_converse {α β c : ℝ}
+    (hc : 0 < c) (hβ : 0 < β)
+    (h' : Tendsto (fun u => 1 - (α / (β * c)) * exp (-(β - α / c) * u))
+      atTop (nhds 1)) : α < β * c := by
+  rw [← tendsto_sub_const_iff (b := 1)] at h'
+  by_contra H
+  simp only [not_lt, neg_sub, sub_sub_cancel_left, sub_self] at H h'
+  have h₀ : α / c - β ≥ 0 := by field_simp;linarith
+  generalize α / c - β = A at *
+  have h₁ : α / (β * c) ≥ 1 := by field_simp;linarith
+  generalize α / (β * c) = B at *
+  by_cases hA : A = 0
+  · subst A;simp at h';linarith
+  · have h₂ := @Tendsto.neg ℝ ℝ _ _ _
+      (fun x ↦ -(B * rexp (A * x))) atTop 0 h'
+    have h₃ : A > 0 := lt_of_le_of_ne h₀ fun a ↦ hA (Eq.symm a)
+    have h₄ : Tendsto (fun x ↦ B * rexp (A * x)) atTop atTop := by
+      intro S hS
+      unfold atTop at hS
+      have ⟨a,ha⟩ : ∃ a, Ici a ⊆ S := mem_atTop_sets.mp hS
+      simp only [mem_map, mem_atTop_sets, ge_iff_le, mem_preimage]
+      by_cases H : a ≤ 0
+      · use 0
+        intro x hx
+        apply ha
+        apply le_trans
+        · change a ≤ 0
+          linarith
+        · apply mul_nonneg
+          · linarith
+          · exact Real.exp_nonneg (A * x)
+      use Real.log (a / B) / A -- a = B * rexp (A * x)
+      intro x hx
+      apply ha
+      suffices a / B ≤ rexp (A * x) by
+        field_simp at this ⊢
+        exact this
+      field_simp at hx
+      have : rexp (log (a / B)) ≤ rexp (A * x) := by
+        exact exp_le_exp.mpr hx
+      convert this using 1
+      refine Eq.symm (exp_log ?_)
+      apply div_pos <;> linarith
+    simp only [neg_neg, neg_zero] at h₂
+    generalize ((fun x ↦ B * rexp (A * x))) = F at *
+    have : nhds (0 : ℝ) = atTop := by
+      exfalso
+      have : Filter.map F atTop ≤ min (nhds 0) atTop := le_inf h₂ h₄
+      simp only [inf_nhds_atTop, le_bot_iff, Filter.map_eq_bot_iff] at this
+      exact NeBot.ne' this
+    have g₀ : Set.Icc (-1:ℝ) 1 ∈ nhds 0 := by
+      apply Icc_mem_nhds <;> simp
+    have g₁ : Set.Icc (-1:ℝ) 1 ∉ atTop := by
+      simp only [mem_atTop_sets, ge_iff_le, mem_Icc, not_exists, not_forall,
+        not_and, not_le]
+      intro y
+      use max (y+1) 2
+      constructor <;> simp
+    rw [this] at g₀
+    tauto
+
+lemma ruin_theory_tendsto_iff {α β c : ℝ}
+    (hc : 0 < c) (hβ : 0 < β) :
+    Tendsto (fun u => 1 - (α / (β * c)) * exp (-(β - α / c) * u))
+      atTop (nhds 1) ↔ α < β * c := by
+  constructor
+  · exact ruin_theory_tendsto_converse hc hβ
+  · exact ruin_theory_tendsto hc
