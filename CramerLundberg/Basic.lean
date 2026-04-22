@@ -22,6 +22,7 @@ Main results:
 * Definition of `integralEquation`:
   `  ∀ u ≥ 0, φ u = ∫ t, exponentialPDFReal α t * ∫ x in Set.Iic (u + c * t),`
     `φ (u + c * t - x) * exponentialPDFReal β x`
+  (If α=0 it corresponds to fixing t=∞ and φ=1)
   We interpret this:
   `φ u` = probability of eventual nonruin given starting capital `u`.
   `α` = rate associated with waiting for a loss (units `1/time`)
@@ -1195,6 +1196,7 @@ in a Markovian environment, 2002
 -/
 def integralEquation₂ (α₀ α₁ Λ₀ Λ₁ c₀ c₁ β₀ β₁ : ℝ)
     (φ₀ φ₁ : ℝ → ℝ) :=
+    --(If α=0 it should corresponds to fixing t=∞ and φ=1)
     (
     ∀ u ≥ 0, φ₀ u = ∫ t, exponentialPDFReal α₀ t
         * exponentialPDFReal Λ₀ t
@@ -1211,71 +1213,19 @@ def integralEquation₂ (α₀ α₁ Λ₀ Λ₁ c₀ c₁ β₀ β₁ : ℝ)
     φ₁ (u + c₁ * t - x) * exponentialPDFReal β₁ x)
     ))
 
-/- if c₀=c₁ and β₀=β₁ and α₀=α₁ then φ₀ and φ₁ can just be the single-variable solution
-`(fun u => 1 - (α / (β * c)) * exp (-(β - α / c) * u))`
-Let's simplify further and assume Λ₀=Λ₁=1
-and α=β=1
-We do need α < β * c perhaps, so c > 1
-Let's try c = 2
--/
-lemma first_observation_april_20
+lemma coupled_equations_trivial_case {α β c : ℝ}
     (φ : ℝ → ℝ)
     (hφ : φ = (fun u => 1 - (1 / (1 * 2)) * exp (-(1 - 1 / 2) * u)))
-    (h₀ : integralEquation 1 2 1 φ)
+    (h₀ : integralEquation α β c φ)
     :
-    integralEquation₂ 1 1 1 1 2 2 1 1
+    integralEquation₂ α α 1 1 c c β β
         φ φ
     := by
-    have h : ( ∀ u ≥ 0,
-      φ u =
-        ∫ (t : ℝ),
-      exponentialPDFReal 1 t * exponentialPDFReal 1 t *
-        (1 / 1 * φ (u + 2 * t) + 1 / 1 * ∫ (x : ℝ) in Iic (u + 2 * t),
-        φ (u + 2 * t - x) * exponentialPDFReal 1 x)) := by
-        unfold integralEquation at h₀
-        unfold exponentialPDFReal gammaPDFReal at h₀ ⊢
-        simp at h₀ ⊢
-        intro u hu
-        specialize h₀ u hu
-        rw [hφ] at h₀ ⊢
-        simp at h₀ ⊢
-        rw [h₀]
-        congr
-        ext t
-        split_ifs with g₀
-        · have : rexp (-t) ≠ 0 := by sorry
-          by_cases H : t = 0
-          · subst t
-            simp
-            by_cases Hu : u = 1 -- not true for u=0
-            · subst u
-              simp
-              field_simp
-              ring_nf
-              field_simp
-              repeat rw [← integral_indicator]
-              simp [Set.indicator]
-              ring_nf
-              field_simp
-              ring_nf
-              field_simp
-              ring_nf
-
-              sorry
-              sorry
-              -- not true
-              sorry
-            · sorry
-          suffices ((
-        ∫ (x : ℝ) in Iic (u + t), if 0 ≤ x then (1 - 2⁻¹
-        * rexp ((2⁻¹ - 1) * (u + t - x))) * (2 * rexp (-(2 * x))) else 0) =
-        rexp (-t) *
-        (1 - 2⁻¹ * rexp ((2⁻¹ - 1) * (u + 2 * t)) +
-        ∫ (x : ℝ) in Iic (u + 2 * t), if 0 ≤ x then (1 - 2⁻¹
-      * rexp ((2⁻¹ - 1) * (u + 2 * t - x))) * rexp (-x) else 0))
-        by field_simp;ring_nf;field_simp;sorry
-          sorry
-        · rfl
     constructor
-    · exact h
-    · exact h
+    · intro u hu
+      unfold integralEquation at h₀
+      rw [h₀]
+      · simp [exponentialPDFReal, gammaPDFReal]
+        sorry
+      · exact hu
+    · sorry
